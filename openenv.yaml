@@ -4,4 +4,28 @@ type: space
 runtime: fastapi
 app: server.app:app
 port: 8000
-
+description: "RL environment for training LLMs to debug Python code"
+tasks:
+  - id: 1
+    difficulty: easy
+    description: "Fix arithmetic bug in single file"
+  - id: 2
+    difficulty: medium
+    description: "Fix cross-file type mismatch bug"
+  - id: 3
+    difficulty: hard
+    description: "Fix silent logic bug with no failing tests"
+action_space:
+  - run_tests
+  - read_file
+  - apply_patch
+  - done
+observation_space:
+  - output
+  - tests_passing
+  - tests_total
+  - files_read
+  - steps_remaining
+  - patches_applied
+reward_range: [-0.5, 1.2]
+max_steps: 10

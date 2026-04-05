@@ -1,27 +1,19 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-# All rights reserved.
-#
-# This source code is licensed under the BSD-style license found in the
-# LICENSE file in the root directory of this source tree.
-
-"""
-Data models for the Bugforge Environment.
-
-The bugforge environment is a simple test environment that echoes back messages.
-"""
-
 from openenv.core.env_server.types import Action, Observation
 from pydantic import Field
+from typing import List
 
 
 class BugforgeAction(Action):
-    """Action for the Bugforge environment - just a message to echo."""
-
-    message: str = Field(..., description="Message to echo back")
+    type: str = Field(..., description="Action type: run_tests, read_file, apply_patch, done")
+    file: str = Field(default="", description="File to read or patch")
+    old_code: str = Field(default="", description="Code to replace")
+    new_code: str = Field(default="", description="Replacement code")
 
 
 class BugforgeObservation(Observation):
-    """Observation from the Bugforge environment - the echoed message."""
-
-    echoed_message: str = Field(default="", description="The echoed message")
-    message_length: int = Field(default=0, description="Length of the echoed message")
+    output: str = Field(default="", description="Result of the action")
+    tests_passing: int = Field(default=0, description="Number of passing tests")
+    tests_total: int = Field(default=0, description="Total number of tests")
+    files_read: List[str] = Field(default_factory=list, description="Files read so far")
+    steps_remaining: int = Field(default=10, description="Steps remaining")
+    patches_applied: int = Field(default=0, description="Patches applied so far")

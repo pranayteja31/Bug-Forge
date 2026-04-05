@@ -21,27 +21,13 @@ class BugforgeEnv(
     """
     Client for the Bugforge Environment.
 
-    This client maintains a persistent WebSocket connection to the environment server,
-    enabling efficient multi-step interactions with lower latency.
-    Each client instance has its own dedicated environment session on the server.
-
     Example:
-        >>> # Connect to a running server
         >>> with BugforgeEnv(base_url="http://localhost:8000") as client:
         ...     result = client.reset()
-        ...     print(result.observation.echoed_message)
+        ...     print(result.observation.output)
         ...
-        ...     result = client.step(BugforgeAction(message="Hello!"))
-        ...     print(result.observation.echoed_message)
-
-    Example with Docker:
-        >>> # Automatically start container and connect
-        >>> client = BugforgeEnv.from_docker_image("bugforge-env:latest")
-        >>> try:
-        ...     result = client.reset()
-        ...     result = client.step(BugforgeAction(message="Test"))
-        ... finally:
-        ...     client.close()
+        ...     result = client.step(BugforgeAction(type="run_tests"))
+        ...     print(result.observation.output)
     """
 
     def _step_payload(self, action: BugforgeAction) -> Dict:
@@ -55,7 +41,10 @@ class BugforgeEnv(
             Dictionary representation suitable for JSON encoding
         """
         return {
-            "message": action.message,
+            "type": action.type,
+            "file": action.file,
+            "old_code": action.old_code,
+            "new_code": action.new_code,
         }
 
     def _parse_result(self, payload: Dict) -> StepResult[BugforgeObservation]:
@@ -70,8 +59,12 @@ class BugforgeEnv(
         """
         obs_data = payload.get("observation", {})
         observation = BugforgeObservation(
-            echoed_message=obs_data.get("echoed_message", ""),
-            message_length=obs_data.get("message_length", 0),
+            output=obs_data.get("output", ""),
+            tests_passing=obs_data.get("tests_passing", 0),
+            tests_total=obs_data.get("tests_total", 0),
+            files_read=obs_data.get("files_read", []),
+            steps_remaining=obs_data.get("steps_remaining", 10),
+            patches_applied=obs_data.get("patches_applied", 0),
             done=payload.get("done", False),
             reward=payload.get("reward"),
             metadata=obs_data.get("metadata", {}),

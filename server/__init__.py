@@ -6,6 +6,6 @@
 
 """Bugforge environment server components."""
 
-from .bugforge_environment import BugforgeEnvironment
+from bugforge.server.bugforge_environment import BugforgeEnvironment
 
 __all__ = ["BugforgeEnvironment"]

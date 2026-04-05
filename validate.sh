@@ -1,0 +1,1 @@
+./validate.sh https://YOUR_HF_USERNAME-bugforge.hf.space .
