@@ -1,0 +1,10 @@
+{
+    "task_id": 3,
+    "difficulty": "hard",
+    "description": "Missing else clause causes silent None return for unknown coupon types",
+    "bug_file": "cart.py",
+    "bug_line": 6,
+    "original_code": "    else:\n        return total",
+    "buggy_code": "",
+    "hint": "What happens when coupon_type is neither FLAT50 nor HALF?"
+}

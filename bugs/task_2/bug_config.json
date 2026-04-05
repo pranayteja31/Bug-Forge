@@ -1,0 +1,10 @@
+{
+    "task_id": 2,
+    "difficulty": "medium",
+    "description": "A type mismatch bug spans two files — models.py returns string instead of int",
+    "bug_file": "models.py",
+    "bug_line": 3,
+    "original_code": "return quantities.get(item_id, 0)",
+    "buggy_code": "return str(quantities.get(item_id, 0))",
+    "hint": "Check what type get_item_quantity returns"
+}

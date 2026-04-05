@@ -1,0 +1,10 @@
+{
+    "task_id": 1,
+    "difficulty": "easy",
+    "description": "A discount calculation function has a wrong divisor",
+    "bug_file": "utils.py",
+    "bug_line": 2,
+    "original_code": "return price * (percent / 100)",
+    "buggy_code": "return price * (percent / 10)",
+    "hint": "Check the arithmetic in utils.py"
+}
