@@ -16,6 +16,7 @@ Log format (mandatory — do not change):
 import json
 import os
 import re
+import sys
 import textwrap
 import time
 
@@ -125,6 +126,11 @@ def log_end(success: bool, steps: int, score: float, rewards: list) -> None:
     )
 
 
+def debug_log(message: str) -> None:
+    """Keep diagnostics off stdout so submission parsing stays clean."""
+    print(message, file=sys.stderr, flush=True)
+
+
 # ---------------------------------------------------------------------------
 # LLM action selection
 # ---------------------------------------------------------------------------
@@ -201,7 +207,7 @@ def get_action(client: OpenAI, task_id: int, step: int, observation: dict, histo
         raw = re.sub(r"\s*```$", "", raw)
         return raw
     except Exception as e:
-        print(f"[DEBUG] Model error: {e}", flush=True)
+        debug_log(f"[DEBUG] Model error: {e}")
         return '{"type": "run_tests"}'
 
 
@@ -263,7 +269,7 @@ def wait_for_server(server_url: str) -> None:
         except Exception:
             pass
 
-        print(f"[DEBUG] Waiting for server... attempt {attempt + 1}/5", flush=True)
+        debug_log(f"[DEBUG] Waiting for server... attempt {attempt + 1}/5")
         time.sleep(2)
 
 
@@ -356,7 +362,7 @@ def run_task_ws(client: OpenAI, task_id: int, base_url: str) -> None:
         success = solved
 
     except Exception as e:
-        print(f"[DEBUG] Task {task_id} error: {e}", flush=True)
+        debug_log(f"[DEBUG] Task {task_id} error: {e}")
     finally:
         if ws:
             try:
@@ -437,7 +443,7 @@ def run_task_http(client: OpenAI, task_id: int, base_url: str) -> None:
         success = solved
 
     except Exception as e:
-        print(f"[DEBUG] Task {task_id} HTTP error: {e}", flush=True)
+        debug_log(f"[DEBUG] Task {task_id} HTTP error: {e}")
     finally:
         log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
 
