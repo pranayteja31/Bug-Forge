@@ -25,7 +25,7 @@ from openai import OpenAI
 # Configuration — all from environment variables
 # ---------------------------------------------------------------------------
 API_KEY = os.getenv("HF_TOKEN") or os.getenv("API_KEY")
-API_BASE_URL = os.getenv("API_BASE_URL") or "https://router.huggingface.co/v1"
+API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
 MODEL_NAME = os.getenv("MODEL_NAME") or "Qwen/Qwen2.5-72B-Instruct"
 IMAGE_NAME = os.getenv("IMAGE_NAME")
 BENCHMARK = "bugforge"
@@ -103,6 +103,7 @@ def get_action(client: OpenAI, step: int, last_obs: str, history: list) -> str:
             temperature=TEMPERATURE,
             max_tokens=MAX_TOKENS,
             stream=False,
+            timeout=30,
         )
         raw = (completion.choices[0].message.content or "").strip()
         # Strip markdown code fences if the model wraps the JSON
@@ -265,12 +266,7 @@ def main():
     llm_client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
 
     # Determine server URL — use IMAGE_NAME if provided (Docker), else local
-    if IMAGE_NAME:
-        # When running against a Docker/HF Space image, the server URL is
-        # typically passed via environment or we connect to local Docker.
-        server_url = os.getenv("SERVER_URL", "http://localhost:8000")
-    else:
-        server_url = os.getenv("SERVER_URL", "http://localhost:8000")
+    server_url = os.getenv("HF_SPACE_URL", "http://localhost:8000")
 
     # Quick healthcheck / warmup ping
     import requests
