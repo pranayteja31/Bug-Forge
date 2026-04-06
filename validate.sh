@@ -1,8 +1,17 @@
-#!/bin/bash
+#!/usr/bin/env bash
+#
+# validate-submission.sh — OpenEnv Submission Validator
+#
+# Checks that your HF Space is live, Docker image builds, and openenv validate passes.
+
+set -uo pipefail
+
+DOCKER_BUILD_TIMEOUT=600
+
 if [ -t 1 ]; then
   RED='\033[0;31m'
   GREEN='\033[0;32m'
-  YELLOW='\033[0;33m'
+  YELLOW='\033[1;33m'
   BOLD='\033[1m'
   NC='\033[0m'
 else
@@ -116,12 +125,12 @@ fi
 log "  Found Dockerfile in $DOCKER_CONTEXT"
 
 BUILD_OK=false
-BUILD_OUTPUT=$(run_with_timeout "${DOCKER_BUILD_TIMEOUT:-300}" docker build "$DOCKER_CONTEXT" 2>&1) && BUILD_OK=true
+BUILD_OUTPUT=$(run_with_timeout "$DOCKER_BUILD_TIMEOUT" docker build "$DOCKER_CONTEXT" 2>&1) && BUILD_OK=true
 
 if [ "$BUILD_OK" = true ]; then
   pass "Docker build succeeded"
 else
-  fail "Docker build failed (timeout=${DOCKER_BUILD_TIMEOUT:-300}s)"
+  fail "Docker build failed (timeout=${DOCKER_BUILD_TIMEOUT}s)"
   printf "%s\n" "$BUILD_OUTPUT" | tail -20
   stop_at "Step 2"
 fi
