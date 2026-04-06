@@ -1,6 +1,6 @@
 ---
 title: BugForge
-emoji: ⚾
+emoji: ":bug:"
 colorFrom: indigo
 colorTo: gray
 sdk: docker
@@ -13,11 +13,22 @@ tags:
 
 # BugForge
 
-BugForge is an OpenEnv environment for interactive Python debugging. Each episode injects one hidden bug into a small codebase, and the agent must inspect failures, read files, patch the code, and stop when the task is fixed.
+BugForge is an OpenEnv environment for training and evaluating agents on a real software engineering task: debugging Python code. Each episode injects exactly one hidden bug into a small task-specific codebase. The agent must run tests, inspect source files, apply an exact patch, and terminate when the issue is fixed.
 
-The project originally started from a generic starter template; the authoritative BugForge-specific description is in the sections above, which supersede any stale starter notes that may appear later in this file.
+This environment models a real human workflow rather than a toy game. It focuses on interactive, evidence-driven bug fixing under a limited step budget.
 
-## Overview
+## Why This Environment Matters
+
+Many coding benchmarks only score a final answer. BugForge scores the full debugging trajectory:
+
+- gathering evidence with tests
+- selecting the right files to inspect
+- making precise patches
+- stopping efficiently once the fix is complete
+
+That makes it useful for RL training, agent evaluation, and reward-design research for code-repair systems.
+
+## OpenEnv Summary
 
 - Benchmark: `bugforge`
 - Runtime: FastAPI / OpenEnv server
@@ -29,50 +40,108 @@ The project originally started from a generic starter template; the authoritativ
 
 ## Action Space
 
-`BugforgeAction` supports:
+`BugforgeAction` supports the following actions:
 
 - `{"type": "run_tests"}`
 - `{"type": "read_file", "file": "filename.py"}`
 - `{"type": "apply_patch", "file": "filename.py", "old_code": "...", "new_code": "..."}`
 - `{"type": "done"}`
 
+Action semantics:
+
+- `run_tests`: execute the task's `tests.py` and return the traceback or success marker
+- `read_file`: return the full contents of a file in the working directory
+- `apply_patch`: replace exact `old_code` with `new_code` in the target file
+- `done`: end the episode when the agent believes the bug is fixed
+
 ## Observation Space
 
 `BugforgeObservation` contains:
 
-- `output`
-- `tests_passing`
-- `tests_total`
-- `files_read`
-- `steps_remaining`
-- `patches_applied`
+- `output`: raw output from the last action
+- `tests_passing`: number of passing tests
+- `tests_total`: total number of tests
+- `files_read`: unique files inspected so far
+- `steps_remaining`: remaining environment step budget
+- `patches_applied`: number of patch attempts
+
+The OpenEnv step result also carries:
+
+- `reward`: scalar reward for the last action
+- `done`: termination flag
 
 ## Tasks
 
-- Task 1: wrong divisor in `utils.py`
-- Task 2: cross-file type mismatch in `models.py`
-- Task 3: missing fallback branch in `cart.py`
+BugForge includes three deterministic tasks with increasing difficulty.
+
+### Task 1 - Easy
+
+- Bug: wrong arithmetic divisor in `utils.py`
+- Goal: fix the discount calculation
+- Skill tested: reading a traceback and repairing a simple single-file bug
+
+### Task 2 - Medium
+
+- Bug: cross-file type mismatch in `models.py`
+- Goal: return an integer quantity instead of a string
+- Skill tested: following a failing symptom across modules and patching the correct file
+
+### Task 3 - Hard
+
+- Bug: missing fallback branch in `cart.py`
+- Goal: restore correct behavior for unsupported coupon types
+- Skill tested: identifying and patching a missing control-flow branch
 
 ## Reward Design
 
-- `run_tests`: `0.10` on the first call, `0.05` later
-- `read_file`: `0.15` when reading the true bug file first, `0.05` for other first-time reads
-- `apply_patch`: `1.00` for a full fix, `0.30` for partial progress, `0.00` otherwise
-- `done`: `1.00` if all tests pass, `0.00` otherwise
+The reward function provides useful signal across the trajectory instead of only at the end.
+
+- `run_tests`: `0.10` on the first call, `0.05` on later calls
+- `read_file`: `0.15` when the true bug file is read for the first time, `0.05` for other first-time reads
+- `apply_patch`:
+  - `1.00` if all tests pass after the patch
+  - `0.30` if the patch increases the number of passing tests
+  - `0.00` if the patch has no effect or makes things worse
+- `done`:
+  - `1.00` if all tests pass
+  - `0.00` otherwise
+
+This encourages efficient debugging behavior:
+
+- gather evidence early
+- inspect relevant files quickly
+- patch precisely
+- stop as soon as the task is solved
+
+## Grading
+
+The final score is produced by `BugforgeEnvironment.grade()`:
+
+- solved episodes score in `[0.8, 1.0]` based on efficiency
+- partially solved episodes score up to `0.6` based on passed tests
+- agents that identify the bug file but fail to fix it can still earn `0.2`
+
+All tasks are deterministic because each episode starts from a clean template and injects a fixed bug from a task config file.
 
 ## Baseline Inference
 
-`inference.py` uses the OpenAI Python client, emits the required `[START]`, `[STEP]`, and `[END]` stdout format, and completes all three tasks on the live Space.
+The baseline script is `inference.py` in the project root. It:
 
-Latest verified baseline:
+- uses the OpenAI Python client
+- reads `HF_TOKEN`, `API_BASE_URL`, and `MODEL_NAME` from environment variables
+- connects to the deployed Space
+- emits the required `[START]`, `[STEP]`, and `[END]` stdout format
+- completes all three tasks well under the 20-minute limit
+
+Latest verified baseline on the live Space:
 
 - Task 1: `success=true`, `steps=4`, `score=0.867`
 - Task 2: `success=true`, `steps=4`, `score=0.867`
 - Task 3: `success=true`, `steps=4`, `score=0.867`
 
-## Setup And Validation
+## Setup
 
-Install the package locally:
+Install dependencies:
 
 ```bash
 pip install -e .
@@ -87,10 +156,20 @@ $env:MODEL_NAME = "Qwen/Qwen2.5-72B-Instruct"
 $env:HF_SPACE_URL = "https://pranayteja31-BugForge.hf.space"
 ```
 
-Build the Docker image:
+Any OpenAI-compatible provider can be used by changing `API_BASE_URL` and `MODEL_NAME`.
+
+## Running Locally
+
+Start the server:
 
 ```bash
-docker build -t bugforge-env .
+python -m bugforge.server.app
+```
+
+Test the reset endpoint:
+
+```bash
+curl -X POST http://localhost:8000/reset -H "Content-Type: application/json" -d "{\"task_id\": 1}"
 ```
 
 Run the baseline:
@@ -99,250 +178,49 @@ Run the baseline:
 python inference.py
 ```
 
-Run the validator:
+## Docker
+
+Build the image:
+
+```bash
+docker build -t bugforge-env .
+```
+
+Run it locally:
+
+```bash
+docker run --rm -p 8000:8000 bugforge-env
+```
+
+## Validation
+
+Run the pre-submission validator:
 
 ```bash
 ./validate.sh https://pranayteja31-BugForge.hf.space .
 ```
 
-The simplest way to use the Bugforge environment is through the `BugforgeEnv` class:
+Expected checks:
 
-```python
-from bugforge import BugforgeAction, BugforgeEnv
-
-try:
-    # Create environment from Docker image
-    bugforgeenv = BugforgeEnv.from_docker_image("bugforge-env:latest")
-
-    # Reset
-    result = bugforgeenv.reset()
-    print(f"Reset: {result.observation.echoed_message}")
-
-    # Send multiple messages
-    messages = ["Hello, World!", "Testing echo", "Final message"]
-
-    for msg in messages:
-        result = bugforgeenv.step(BugforgeAction(message=msg))
-        print(f"Sent: '{msg}'")
-        print(f"  → Echoed: '{result.observation.echoed_message}'")
-        print(f"  → Length: {result.observation.message_length}")
-        print(f"  → Reward: {result.reward}")
-
-finally:
-    # Always clean up
-    bugforgeenv.close()
-```
-
-That's it! The `BugforgeEnv.from_docker_image()` method handles:
-- Starting the Docker container
-- Waiting for the server to be ready
-- Connecting to the environment
-- Container cleanup when you call `close()`
-
-## Building the Docker Image
-
-Before using the environment, you need to build the Docker image:
-
-```bash
-# From project root
-docker build -t bugforge-env:latest -f server/Dockerfile .
-```
-
-## Deploying to Hugging Face Spaces
-
-You can easily deploy your OpenEnv environment to Hugging Face Spaces using the `openenv push` command:
-
-```bash
-# From the environment directory (where openenv.yaml is located)
-openenv push
-
-# Or specify options
-openenv push --namespace my-org --private
-```
-
-The `openenv push` command will:
-1. Validate that the directory is an OpenEnv environment (checks for `openenv.yaml`)
-2. Prepare a custom build for Hugging Face Docker space (enables web interface)
-3. Upload to Hugging Face (ensuring you're logged in)
-
-### Prerequisites
-
-- Authenticate with Hugging Face: The command will prompt for login if not already authenticated
-
-### Options
-
-- `--directory`, `-d`: Directory containing the OpenEnv environment (defaults to current directory)
-- `--repo-id`, `-r`: Repository ID in format 'username/repo-name' (defaults to 'username/env-name' from openenv.yaml)
-- `--base-image`, `-b`: Base Docker image to use (overrides Dockerfile FROM)
-- `--private`: Deploy the space as private (default: public)
-
-### Examples
-
-```bash
-# Push to your personal namespace (defaults to username/env-name from openenv.yaml)
-openenv push
-
-# Push to a specific repository
-openenv push --repo-id my-org/my-env
-
-# Push with a custom base image
-openenv push --base-image ghcr.io/meta-pytorch/openenv-base:latest
-
-# Push as a private space
-openenv push --private
-
-# Combine options
-openenv push --repo-id my-org/my-env --base-image custom-base:latest --private
-```
-
-After deployment, your space will be available at:
-`https://huggingface.co/spaces/<repo-id>`
-
-The deployed space includes:
-- **Web Interface** at `/web` - Interactive UI for exploring the environment
-- **API Documentation** at `/docs` - Full OpenAPI/Swagger interface
-- **Health Check** at `/health` - Container health monitoring
-- **WebSocket** at `/ws` - Persistent session endpoint for low-latency interactions
-
-## Environment Details
-
-### Action
-**BugforgeAction**
-- `type` (str) - action kind: `run_tests`, `read_file`, `apply_patch`, or `done`
-- `file` (str) - file to inspect or patch
-- `old_code` (str) - exact code to replace
-- `new_code` (str) - replacement code
-
-### Observation
-**BugforgeObservation**
-- `output` (str) - raw output from the last action
-- `tests_passing` (int) - number of passing tests
-- `tests_total` (int) - total test count
-- `reward` (float) - Reward based on message length (length × 0.1)
-- `files_read` (list[str]) - unique files inspected so far
-- `steps_remaining` (int) - remaining step budget
-- `patches_applied` (int) - number of patch attempts
-
-### Reward
-The reward is calculated as: `message_length × 0.1`
-- "Hi" → reward: 0.2
-- "Hello, World!" → reward: 1.3
-- Empty message → reward: 0.0
-
-## Advanced Usage
-
-### Connecting to an Existing Server
-
-If you already have a Bugforge environment server running, you can connect directly:
-
-```python
-from bugforge import BugforgeEnv
-
-# Connect to existing server
-bugforgeenv = BugforgeEnv(base_url="<ENV_HTTP_URL_HERE>")
-
-# Use as normal
-result = bugforgeenv.reset()
-result = bugforgeenv.step(BugforgeAction(message="Hello!"))
-```
-
-Note: When connecting to an existing server, `bugforgeenv.close()` will NOT stop the server.
-
-### Using the Context Manager
-
-The client supports context manager usage for automatic connection management:
-
-```python
-from bugforge import BugforgeAction, BugforgeEnv
-
-# Connect with context manager (auto-connects and closes)
-with BugforgeEnv(base_url="http://localhost:8000") as env:
-    result = env.reset()
-    print(f"Reset: {result.observation.echoed_message}")
-    # Multiple steps with low latency
-    for msg in ["Hello", "World", "!"]:
-        result = env.step(BugforgeAction(message=msg))
-        print(f"Echoed: {result.observation.echoed_message}")
-```
-
-The client uses WebSocket connections for:
-- **Lower latency**: No HTTP connection overhead per request
-- **Persistent session**: Server maintains your environment state
-- **Efficient for episodes**: Better for many sequential steps
-
-### Concurrent WebSocket Sessions
-
-The server supports multiple concurrent WebSocket connections. To enable this,
-modify `server/app.py` to use factory mode:
-
-```python
-# In server/app.py - use factory mode for concurrent sessions
-app = create_app(
-    BugforgeEnvironment,  # Pass class, not instance
-    BugforgeAction,
-    BugforgeObservation,
-    max_concurrent_envs=4,  # Allow 4 concurrent sessions
-)
-```
-
-Then multiple clients can connect simultaneously:
-
-```python
-from bugforge import BugforgeAction, BugforgeEnv
-from concurrent.futures import ThreadPoolExecutor
-
-def run_episode(client_id: int):
-    with BugforgeEnv(base_url="http://localhost:8000") as env:
-        result = env.reset()
-        for i in range(10):
-            result = env.step(BugforgeAction(message=f"Client {client_id}, step {i}"))
-        return client_id, result.observation.message_length
-
-# Run 4 episodes concurrently
-with ThreadPoolExecutor(max_workers=4) as executor:
-    results = list(executor.map(run_episode, range(4)))
-```
-
-## Development & Testing
-
-### Direct Environment Testing
-
-Test the environment logic directly without starting the HTTP server:
-
-```bash
-# From the server directory
-python3 server/bugforge_environment.py
-```
-
-This verifies that:
-- Environment resets correctly
-- Step executes actions properly
-- State tracking works
-- Rewards are calculated correctly
-
-### Running Locally
-
-Run the server locally for development:
-
-```bash
-uvicorn server.app:app --reload
-```
+- the Space responds to `POST /reset`
+- Docker build succeeds
+- `openenv validate` passes
 
 ## Project Structure
 
-```
+```text
 bugforge/
-├── .dockerignore         # Docker build exclusions
-├── __init__.py            # Module exports
-├── README.md              # This file
-├── openenv.yaml           # OpenEnv manifest
-├── pyproject.toml         # Project metadata and dependencies
-├── uv.lock                # Locked dependencies (generated)
-├── client.py              # BugforgeEnv client
-├── models.py              # Action and Observation models
-└── server/
-    ├── __init__.py        # Server module exports
-    ├── bugforge_environment.py  # Core environment logic
-    ├── app.py             # FastAPI application (HTTP + WebSocket endpoints)
-    └── Dockerfile         # Container image definition
+  __init__.py
+  client.py
+  models.py
+  inference.py
+  openenv.yaml
+  validate.sh
+  bugs/
+    task_1/
+    task_2/
+    task_3/
+  server/
+    app.py
+    bugforge_environment.py
 ```
