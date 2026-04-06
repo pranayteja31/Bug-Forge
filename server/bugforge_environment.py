@@ -213,5 +213,5 @@ class BugforgeEnvironment(Environment[BugforgeAction, BugforgeObservation, State
     def _parse_tests(self, output: str):
         if "ALL_TESTS_PASSED" in output:
             return 3, 3
-        failures = output.count("AssertionError") + output.count("AssertionError")
+        failures = output.count("AssertionError") + output.count("TypeError") + output.count("NameError")
         return max(0, 3 - failures), 3

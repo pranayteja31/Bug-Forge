@@ -1,2 +1,0 @@
-[console_scripts]
-server = bugforge.server.app:main
