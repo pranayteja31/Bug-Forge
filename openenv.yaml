@@ -4,7 +4,7 @@ type: space
 runtime: fastapi
 app: server.app:app
 port: 8000
-description: "RL environment for training LLMs to debug Python code"
+description: "OpenEnv debugging environment for interactive Python code repair"
 tasks:
   - id: 1
     difficulty: easy
@@ -14,7 +14,7 @@ tasks:
     description: "Fix cross-file type mismatch bug"
   - id: 3
     difficulty: hard
-    description: "Fix silent logic bug with no failing tests"
+    description: "Fix a missing fallback branch in coupon logic"
 action_space:
   - run_tests
   - read_file

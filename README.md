@@ -1,5 +1,5 @@
 ---
-title: Bugforge Environment Server
+title: BugForge
 emoji: ⚾
 colorFrom: indigo
 colorTo: gray
@@ -11,11 +11,99 @@ tags:
   - openenv
 ---
 
-# Bugforge Environment
+# BugForge
 
-A simple test environment that echoes back messages. Perfect for testing the env APIs as well as demonstrating environment usage patterns.
+BugForge is an OpenEnv environment for interactive Python debugging. Each episode injects one hidden bug into a small codebase, and the agent must inspect failures, read files, patch the code, and stop when the task is fixed.
 
-## Quick Start
+The project originally started from a generic starter template; the authoritative BugForge-specific description is in the sections above, which supersede any stale starter notes that may appear later in this file.
+
+## Overview
+
+- Benchmark: `bugforge`
+- Runtime: FastAPI / OpenEnv server
+- Reward range: `0.0` to `1.0`
+- Environment step budget: `10`
+- Baseline inference budget: `6`
+- Hugging Face Space: `https://huggingface.co/spaces/pranayteja31/BugForge`
+- Live API base: `https://pranayteja31-BugForge.hf.space`
+
+## Action Space
+
+`BugforgeAction` supports:
+
+- `{"type": "run_tests"}`
+- `{"type": "read_file", "file": "filename.py"}`
+- `{"type": "apply_patch", "file": "filename.py", "old_code": "...", "new_code": "..."}`
+- `{"type": "done"}`
+
+## Observation Space
+
+`BugforgeObservation` contains:
+
+- `output`
+- `tests_passing`
+- `tests_total`
+- `files_read`
+- `steps_remaining`
+- `patches_applied`
+
+## Tasks
+
+- Task 1: wrong divisor in `utils.py`
+- Task 2: cross-file type mismatch in `models.py`
+- Task 3: missing fallback branch in `cart.py`
+
+## Reward Design
+
+- `run_tests`: `0.10` on the first call, `0.05` later
+- `read_file`: `0.15` when reading the true bug file first, `0.05` for other first-time reads
+- `apply_patch`: `1.00` for a full fix, `0.30` for partial progress, `0.00` otherwise
+- `done`: `1.00` if all tests pass, `0.00` otherwise
+
+## Baseline Inference
+
+`inference.py` uses the OpenAI Python client, emits the required `[START]`, `[STEP]`, and `[END]` stdout format, and completes all three tasks on the live Space.
+
+Latest verified baseline:
+
+- Task 1: `success=true`, `steps=4`, `score=0.867`
+- Task 2: `success=true`, `steps=4`, `score=0.867`
+- Task 3: `success=true`, `steps=4`, `score=0.867`
+
+## Setup And Validation
+
+Install the package locally:
+
+```bash
+pip install -e .
+```
+
+Set the inference environment variables:
+
+```powershell
+$env:HF_TOKEN = "<your_api_key>"
+$env:API_BASE_URL = "https://router.huggingface.co/v1"
+$env:MODEL_NAME = "Qwen/Qwen2.5-72B-Instruct"
+$env:HF_SPACE_URL = "https://pranayteja31-BugForge.hf.space"
+```
+
+Build the Docker image:
+
+```bash
+docker build -t bugforge-env .
+```
+
+Run the baseline:
+
+```bash
+python inference.py
+```
+
+Run the validator:
+
+```bash
+./validate.sh https://pranayteja31-BugForge.hf.space .
+```
 
 The simplest way to use the Bugforge environment is through the `BugforgeEnv` class:
 
@@ -119,16 +207,21 @@ The deployed space includes:
 ## Environment Details
 
 ### Action
-**BugforgeAction**: Contains a single field
-- `message` (str) - The message to echo back
+**BugforgeAction**
+- `type` (str) - action kind: `run_tests`, `read_file`, `apply_patch`, or `done`
+- `file` (str) - file to inspect or patch
+- `old_code` (str) - exact code to replace
+- `new_code` (str) - replacement code
 
 ### Observation
-**BugforgeObservation**: Contains the echo response and metadata
-- `echoed_message` (str) - The message echoed back
-- `message_length` (int) - Length of the message
+**BugforgeObservation**
+- `output` (str) - raw output from the last action
+- `tests_passing` (int) - number of passing tests
+- `tests_total` (int) - total test count
 - `reward` (float) - Reward based on message length (length × 0.1)
-- `done` (bool) - Always False for echo environment
-- `metadata` (dict) - Additional info like step count
+- `files_read` (list[str]) - unique files inspected so far
+- `steps_remaining` (int) - remaining step budget
+- `patches_applied` (int) - number of patch attempts
 
 ### Reward
 The reward is calculated as: `message_length × 0.1`
