@@ -186,7 +186,7 @@ class BugforgeEnvironment(Environment[BugforgeAction, BugforgeObservation, State
             with open(filepath) as f:
                 content = f.read()
             if old_code not in content:
-                return "Patch failed: code not found", -0.1
+                return "Patch failed: code not found", 0.0
             passing_before, _ = self._parse_tests(self._run_tests())
             new_content = content.replace(old_code, new_code)
             with open(filepath, "w") as f:
@@ -198,17 +198,16 @@ class BugforgeEnvironment(Environment[BugforgeAction, BugforgeObservation, State
             elif passing_after > passing_before:
                 return f"Patch applied. {passing_after}/{total} tests passing.", 0.3
             elif passing_after < passing_before:
-                return "Patch applied but broke passing tests!", -0.5
+                return "Patch applied but broke passing tests!", 0.0
             return "Patch applied. No change in tests.", 0.0
         except Exception as e:
-            return f"Patch error: {str(e)}", -0.1
+            return f"Patch error: {str(e)}", 0.0
 
     def _finish(self):
         test_output = self._run_tests()
         passing, total = self._parse_tests(test_output)
         if passing == total:
-            bonus = (self.max_steps - self.steps_taken) * 0.05
-            return "Done! All tests pass!", 1.0 + bonus
+            return "Done! All tests pass!", 1.0
         return f"Done. Only {passing}/{total} tests passing.", 0.0
 
     def _parse_tests(self, output: str):

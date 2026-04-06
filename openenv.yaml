@@ -27,5 +27,5 @@ observation_space:
   - files_read
   - steps_remaining
   - patches_applied
-reward_range: [-0.5, 1.2]
+reward_range: [0.0, 1.0]
 max_steps: 10
