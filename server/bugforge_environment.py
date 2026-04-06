@@ -61,6 +61,13 @@ class BugforgeEnvironment(Environment[BugforgeAction, BugforgeObservation, State
         timeout_s: Optional[float] = None,
         **kwargs: Any,
     ) -> BugforgeObservation:
+        # Guard: if reset() was never called, return an error observation
+        if self.working_dir is None:
+            return BugforgeObservation(
+                output="Error: call reset() before step().",
+                done=True,
+            )
+
         if self._done:
             passing, total = self._parse_tests(self._run_tests())
             return BugforgeObservation(
