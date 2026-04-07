@@ -1,0 +1,10 @@
+{
+    "task_id": 4,
+    "difficulty": "medium",
+    "description": "A normalization helper forgets to trim whitespace before lowercasing",
+    "bug_file": "utils.py",
+    "bug_line": 2,
+    "original_code": "return username.strip().lower()",
+    "buggy_code": "return username.lower()",
+    "hint": "Check how usernames are normalized before building handles"
+}

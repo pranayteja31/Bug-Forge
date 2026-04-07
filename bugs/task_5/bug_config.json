@@ -1,0 +1,10 @@
+{
+    "task_id": 5,
+    "difficulty": "hard",
+    "description": "A shipping-zone classifier sends west coast zip codes to the standard zone",
+    "bug_file": "models.py",
+    "bug_line": 3,
+    "original_code": "        return \"west\"",
+    "buggy_code": "        return \"standard\"",
+    "hint": "Check how zip code prefixes map to shipping zones"
+}

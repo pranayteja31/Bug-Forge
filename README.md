@@ -1,6 +1,6 @@
 ---
 title: BugForge
-emoji: ":bug:"
+emoji: 🚀
 colorFrom: indigo
 colorTo: gray
 sdk: docker
@@ -72,7 +72,7 @@ The OpenEnv step result also carries:
 
 ## Tasks
 
-BugForge includes three deterministic tasks with increasing difficulty.
+BugForge includes five deterministic tasks with increasing difficulty.
 
 ### Task 1 - Easy
 
@@ -91,6 +91,18 @@ BugForge includes three deterministic tasks with increasing difficulty.
 - Bug: missing fallback branch in `cart.py`
 - Goal: restore correct behavior for unsupported coupon types
 - Skill tested: identifying and patching a missing control-flow branch
+
+### Task 4 - Medium
+
+- Bug: username normalization drops lowercasing but forgets to trim whitespace in `utils.py`
+- Goal: normalize usernames before building handles
+- Skill tested: spotting a subtle data-cleaning bug from assertion output
+
+### Task 5 - Hard
+
+- Bug: shipping zone logic in `models.py` misclassifies west coast zip codes
+- Goal: restore correct zone routing for price calculation
+- Skill tested: fixing a classification bug that propagates into downstream totals
 
 ## Reward Design
 
@@ -131,13 +143,15 @@ The baseline script is `inference.py` in the project root. It:
 - reads `HF_TOKEN`, `API_BASE_URL`, and `MODEL_NAME` from environment variables
 - connects to the deployed Space
 - emits the required `[START]`, `[STEP]`, and `[END]` stdout format
-- completes all three tasks well under the 20-minute limit
+- completes all five tasks well under the 20-minute limit
 
 Latest verified baseline on the live Space:
 
 - Task 1: `success=true`, `steps=4`, `score=0.867`
 - Task 2: `success=true`, `steps=4`, `score=0.867`
 - Task 3: `success=true`, `steps=4`, `score=0.867`
+- Task 4: expected to follow the same run-tests -> read-file -> patch -> done flow
+- Task 5: expected to follow the same run-tests -> read-file -> patch -> done flow
 
 ## Setup
 
@@ -220,6 +234,8 @@ bugforge/
     task_1/
     task_2/
     task_3/
+    task_4/
+    task_5/
   server/
     app.py
     bugforge_environment.py

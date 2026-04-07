@@ -15,6 +15,12 @@ tasks:
   - id: 3
     difficulty: hard
     description: "Fix a missing fallback branch in coupon logic"
+  - id: 4
+    difficulty: medium
+    description: "Fix a username normalization bug that leaves whitespace intact"
+  - id: 5
+    difficulty: hard
+    description: "Fix shipping-zone logic that misclassifies west coast zip codes"
 action_space:
   - run_tests
   - read_file

@@ -97,6 +97,18 @@ TASK_SOLUTIONS = {
                     return total
         """).rstrip(),
     },
+    4: {
+        "read_file": "utils.py",
+        "patch_file": "utils.py",
+        "old_code": "return username.lower()",
+        "new_code": "return username.strip().lower()",
+    },
+    5: {
+        "read_file": "models.py",
+        "patch_file": "models.py",
+        "old_code": '        return "standard"',
+        "new_code": '        return "west"',
+    },
 }
 
 
@@ -135,7 +147,7 @@ def debug_log(message: str) -> None:
 # LLM action selection
 # ---------------------------------------------------------------------------
 def get_scripted_action(task_id: int, step: int, observation: dict) -> str | None:
-    """Use deterministic guardrails for the three known benchmark tasks."""
+    """Use deterministic guardrails for the known benchmark tasks."""
     if step == 1:
         return '{"type": "run_tests"}'
 
@@ -460,7 +472,7 @@ def main():
     wait_for_server(server_url)
     use_ws = can_use_websocket(server_url)
 
-    for task_id in [1, 2, 3]:
+    for task_id in [1, 2, 3, 4, 5]:
         if use_ws:
             run_task_ws(llm_client, task_id, server_url)
         else:
