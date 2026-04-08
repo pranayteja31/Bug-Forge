@@ -4,3 +4,7 @@ __pycache__/
 bugs/task_*/working/
 
 full_output.txt
+full_output_v2.txt
+full_output_v3.txt
+output.txt
+output_*.txt
