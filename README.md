@@ -1,4 +1,15 @@
-
+---
+title: BugForge
+emoji: 🚀
+colorFrom: indigo
+colorTo: gray
+sdk: docker
+pinned: false
+app_port: 8000
+base_path: /web
+tags:
+  - openenv
+---
 
 # BugForge
 
@@ -77,6 +88,12 @@ Final score (`grade()`):
 - solved: `0.8` to `1.0` based on efficiency
 - partially solved: up to `0.6` based on passed tests
 - bug-file discovery fallback: `0.2`
+
+## Recent Improvements
+
+- test parsing is now robust to more exception types and does not rely on counting only a fixed subset of errors
+- test totals are discovered dynamically from each task's `tests.py` rather than hardcoded assumptions
+- grading remains in the same `0.0` to `1.0` range and keeps the original reward design semantics
 
 ## Baseline Inference
 

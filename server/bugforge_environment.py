@@ -4,6 +4,7 @@ import os
 import shutil
 import json
 import uuid
+import re
 from typing import Any, Optional
 
 from openenv.core.env_server.interfaces import Environment
@@ -24,6 +25,8 @@ class BugforgeEnvironment(Environment[BugforgeAction, BugforgeObservation, State
         self.patches_applied = 0
         self.total_reward = 0.0
         self._done = False
+        self._tests_total = 0
+        self._test_order = []
 
     def reset(
         self,
@@ -43,6 +46,7 @@ class BugforgeEnvironment(Environment[BugforgeAction, BugforgeObservation, State
         self.task_id = kwargs.get("task_id", 1)
 
         self.working_dir, self.config = self._inject_bug(self.task_id)
+        self._tests_total, self._test_order = self._discover_tests_metadata()
         test_output = self._run_tests()
         passing, total = self._parse_tests(test_output)
 
@@ -210,8 +214,52 @@ class BugforgeEnvironment(Environment[BugforgeAction, BugforgeObservation, State
             return "Done! All tests pass!", 1.0
         return f"Done. Only {passing}/{total} tests passing.", 0.0
 
+    def _discover_tests_metadata(self):
+        if not self.working_dir:
+            return 0, []
+
+        tests_path = os.path.join(self.working_dir, "tests.py")
+        try:
+            with open(tests_path, "r", encoding="utf-8") as f:
+                content = f.read()
+        except Exception:
+            return 0, []
+
+        # Primary signal: explicit invocation order in __main__ block.
+        ordered_calls = re.findall(r"^\s*(test_[A-Za-z0-9_]+)\(\)\s*$", content, flags=re.MULTILINE)
+        if ordered_calls:
+            return len(ordered_calls), ordered_calls
+
+        # Fallback: discovered test functions.
+        discovered_defs = re.findall(r"^\s*def\s+(test_[A-Za-z0-9_]+)\s*\(", content, flags=re.MULTILINE)
+        return len(discovered_defs), discovered_defs
+
     def _parse_tests(self, output: str):
+        if self._tests_total <= 0:
+            self._tests_total, self._test_order = self._discover_tests_metadata()
+
+        total = self._tests_total
+        if total <= 0:
+            # Conservative fallback if test discovery fails.
+            return (0, 0) if "ALL_TESTS_PASSED" not in output else (0, 0)
+
         if "ALL_TESTS_PASSED" in output:
-            return 3, 3
-        failures = output.count("AssertionError") + output.count("TypeError") + output.count("NameError")
-        return max(0, 3 - failures), 3
+            return total, total
+
+        # Robustly infer which test failed from traceback.
+        failed_test_names = re.findall(r"\bin\s+(test_[A-Za-z0-9_]+)\b", output)
+        failed_test = None
+        for name in failed_test_names:
+            if name in self._test_order:
+                failed_test = name
+                break
+
+        if failed_test:
+            return self._test_order.index(failed_test), total
+
+        # Any traceback/exception without a known test anchor => treat as 0 passing.
+        if "Traceback" in output or "Error" in output or "Exception" in output:
+            return 0, total
+
+        # No explicit pass marker and no clear traceback; stay conservative.
+        return 0, total
