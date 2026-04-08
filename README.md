@@ -148,10 +148,10 @@ The baseline script is `inference.py` in the project root. It:
 Latest verified baseline on the live Space:
 
 - Task 1: `success=true`, `steps=4`, `score=0.867`
-- Task 2: `success=true`, `steps=4`, `score=0.867`
-- Task 3: `success=true`, `steps=4`, `score=0.867`
-- Task 4: expected to follow the same run-tests -> read-file -> patch -> done flow
-- Task 5: expected to follow the same run-tests -> read-file -> patch -> done flow
+- Task 2: `success=true`, `steps=5`, `score=0.828`
+- Task 3: `success=true`, `steps=5`, `score=0.833`
+- Task 4: `success=true`, `steps=6`, `score=0.795`
+- Task 5: `success=true`, `steps=6`, `score=0.790`
 
 ## Setup
 
