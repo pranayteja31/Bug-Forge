@@ -66,19 +66,33 @@ SYSTEM_PROMPT = textwrap.dedent("""\
 
 TASK_SOLUTIONS = {
     1: {
-        "read_file": "utils.py",
+        "scripted_actions": [
+            {"type": "read_file", "file": "utils.py"},
+            {"type": "apply_patch"},
+            {"type": "done"},
+        ],
         "patch_file": "utils.py",
         "old_code": "return price * (percent / 10)",
         "new_code": "return price * (percent / 100)",
     },
     2: {
-        "read_file": "models.py",
+        "scripted_actions": [
+            {"type": "read_file", "file": "cart.py"},
+            {"type": "read_file", "file": "models.py"},
+            {"type": "apply_patch"},
+            {"type": "done"},
+        ],
         "patch_file": "models.py",
         "old_code": "return str(quantities.get(item_id, 0))",
         "new_code": "return quantities.get(item_id, 0)",
     },
     3: {
-        "read_file": "cart.py",
+        "scripted_actions": [
+            {"type": "read_file", "file": "cart.py"},
+            {"type": "run_tests"},
+            {"type": "apply_patch"},
+            {"type": "done"},
+        ],
         "patch_file": "cart.py",
         "old_code": textwrap.dedent("""\
             def apply_coupon(total, coupon_type):
@@ -98,13 +112,25 @@ TASK_SOLUTIONS = {
         """).rstrip(),
     },
     4: {
-        "read_file": "utils.py",
+        "scripted_actions": [
+            {"type": "read_file", "file": "tests.py"},
+            {"type": "read_file", "file": "utils.py"},
+            {"type": "run_tests"},
+            {"type": "apply_patch"},
+            {"type": "done"},
+        ],
         "patch_file": "utils.py",
         "old_code": "return username.lower()",
         "new_code": "return username.strip().lower()",
     },
     5: {
-        "read_file": "models.py",
+        "scripted_actions": [
+            {"type": "read_file", "file": "tests.py"},
+            {"type": "read_file", "file": "cart.py"},
+            {"type": "read_file", "file": "models.py"},
+            {"type": "apply_patch"},
+            {"type": "done"},
+        ],
         "patch_file": "models.py",
         "old_code": '        return "standard"',
         "new_code": '        return "west"',
@@ -158,19 +184,15 @@ def get_scripted_action(task_id: int, step: int, observation: dict) -> str | Non
     if not plan:
         return None
 
-    files_read = observation.get("files_read", [])
-    if plan["read_file"] not in files_read:
-        return json.dumps({"type": "read_file", "file": plan["read_file"]})
-
-    if observation.get("patches_applied", 0) == 0:
-        return json.dumps(
-            {
-                "type": "apply_patch",
-                "file": plan["patch_file"],
-                "old_code": plan["old_code"],
-                "new_code": plan["new_code"],
-            }
-        )
+    action_index = step - 2
+    scripted_actions = plan.get("scripted_actions", [])
+    if 0 <= action_index < len(scripted_actions):
+        action = dict(scripted_actions[action_index])
+        if action["type"] == "apply_patch":
+            action["file"] = plan["patch_file"]
+            action["old_code"] = plan["old_code"]
+            action["new_code"] = plan["new_code"]
+        return json.dumps(action)
 
     return '{"type": "done"}'
 
@@ -308,6 +330,27 @@ def unpack_ws_payload(message: str) -> tuple[dict, float, bool]:
     return observation, reward, done
 
 
+def calculate_score(final_obs_data: dict, rewards: list[float], steps_taken: int, is_done: bool) -> tuple[float, bool]:
+    """Compute a reproducible score in [0, 1] with a small search-efficiency penalty."""
+    solved = (
+        final_obs_data.get("tests_total", 0) > 0
+        and final_obs_data.get("tests_passing") == final_obs_data.get("tests_total")
+    ) or (is_done and rewards and rewards[-1] > 0.0)
+
+    if solved:
+        efficiency = max(MAX_STEPS - steps_taken, 0) / MAX_STEPS
+        files_read = len(final_obs_data.get("files_read", []))
+        search_penalty = 0.005 * max(0, files_read - 1)
+        score = 0.8 + (0.2 * efficiency) - search_penalty
+        return round(min(max(score, 0.0), 1.0), 3), True
+
+    if final_obs_data.get("tests_total", 0) > 0:
+        partial = (final_obs_data.get("tests_passing", 0) / final_obs_data["tests_total"]) * 0.6
+        return round(min(max(partial, 0.0), 1.0), 3), False
+
+    return 0.0, False
+
+
 # ---------------------------------------------------------------------------
 # Environment interaction via WebSocket
 # ---------------------------------------------------------------------------
@@ -363,15 +406,7 @@ def run_task_ws(client: OpenAI, task_id: int, base_url: str) -> None:
         if not is_done:
             steps_taken, is_done, final_obs_data = finalize_task_ws(ws, rewards, steps_taken)
 
-        solved = (
-            final_obs_data.get("tests_total", 0) > 0
-            and final_obs_data.get("tests_passing") == final_obs_data.get("tests_total")
-        ) or (is_done and rewards and rewards[-1] > 0.0)
-        if solved:
-            score = round(0.8 + (0.2 * max(MAX_STEPS - steps_taken, 0) / MAX_STEPS), 3)
-        elif final_obs_data.get("tests_total", 0) > 0:
-            score = round((final_obs_data.get("tests_passing", 0) / final_obs_data["tests_total"]) * 0.6, 3)
-        success = solved
+        score, success = calculate_score(final_obs_data, rewards, steps_taken, is_done)
 
     except Exception as e:
         debug_log(f"[DEBUG] Task {task_id} error: {e}")
@@ -444,15 +479,7 @@ def run_task_http(client: OpenAI, task_id: int, base_url: str) -> None:
         if not is_done:
             steps_taken, is_done, final_obs_data = finalize_task_http(base_url, rewards, steps_taken)
 
-        solved = (
-            final_obs_data.get("tests_total", 0) > 0
-            and final_obs_data.get("tests_passing") == final_obs_data.get("tests_total")
-        ) or (is_done and rewards and rewards[-1] > 0.0)
-        if solved:
-            score = round(0.8 + (0.2 * max(MAX_STEPS - steps_taken, 0) / MAX_STEPS), 3)
-        elif final_obs_data.get("tests_total", 0) > 0:
-            score = round((final_obs_data.get("tests_passing", 0) / final_obs_data["tests_total"]) * 0.6, 3)
-        success = solved
+        score, success = calculate_score(final_obs_data, rewards, steps_taken, is_done)
 
     except Exception as e:
         debug_log(f"[DEBUG] Task {task_id} HTTP error: {e}")
