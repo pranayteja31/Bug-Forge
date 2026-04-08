@@ -344,6 +344,11 @@ def unpack_ws_payload(message: str) -> tuple[dict[str, Any], float, bool]:
     return observation, reward, done
 
 
+def strict_score(value: float) -> float:
+    """Phase 2 requires score strictly inside (0, 1)."""
+    return round(min(max(value, 0.001), 0.999), 3)
+
+
 def calculate_score(final_obs_data: dict[str, Any], steps_taken: int) -> tuple[float, bool]:
     tests_passing = final_obs_data.get("tests_passing", 0)
     tests_total = final_obs_data.get("tests_total", 0)
@@ -353,13 +358,13 @@ def calculate_score(final_obs_data: dict[str, Any], steps_taken: int) -> tuple[f
         total_budget = steps_taken + remaining
         efficiency = (remaining / total_budget) if total_budget > 0 else 0.0
         score = 0.8 + (0.2 * efficiency)
-        return round(min(max(score, 0.0), 1.0), 3), True
+        return strict_score(score), True
 
     if tests_total > 0 and tests_passing > 0:
         partial = (tests_passing / tests_total) * 0.6
-        return round(min(max(partial, 0.0), 1.0), 3), False
+        return strict_score(partial), False
 
-    return 0.0, False
+    return strict_score(0.0), False
 
 
 def run_task_ws(client: OpenAI, task_id: int, base_url: str) -> None:

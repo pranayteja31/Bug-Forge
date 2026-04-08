@@ -28,6 +28,11 @@ class BugforgeEnvironment(Environment[BugforgeAction, BugforgeObservation, State
         self._tests_total = 0
         self._test_order = []
 
+    @staticmethod
+    def _strict_score(value: float) -> float:
+        """Hackathon requires strict (0, 1), excluding exact 0.0 and 1.0."""
+        return round(min(max(value, 0.001), 0.999), 3)
+
     def reset(
         self,
         seed: Optional[int] = None,
@@ -133,12 +138,12 @@ class BugforgeEnvironment(Environment[BugforgeAction, BugforgeObservation, State
         passing, total = self._parse_tests(test_output)
         if passing == total and total > 0:
             efficiency = (self.max_steps - self.steps_taken) / self.max_steps
-            return round(0.8 + (0.2 * efficiency), 3)
+            return self._strict_score(0.8 + (0.2 * efficiency))
         elif passing > 0:
-            return round((passing / total) * 0.6, 3)
+            return self._strict_score((passing / total) * 0.6)
         elif self.config and self.config["bug_file"] in self.files_read:
-            return 0.2
-        return 0.0
+            return self._strict_score(0.2)
+        return self._strict_score(0.0)
 
     def _inject_bug(self, task_id):
         base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
