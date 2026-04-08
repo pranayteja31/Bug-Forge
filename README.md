@@ -102,7 +102,7 @@ Baseline script: `inference.py` (root).
 It:
 
 - uses OpenAI Python client
-- reads `API_KEY` (or `HF_TOKEN` fallback), `API_BASE_URL`, `MODEL_NAME`, `HF_SPACE_URL`
+- reads `API_KEY`, `API_BASE_URL`, `MODEL_NAME`, `HF_SPACE_URL`
 - emits required `[START]`, `[STEP]`, `[END]` logs
 - is designed to run under 20 minutes on a valid model/provider setup
 

@@ -25,8 +25,10 @@ from openai import OpenAI
 
 # Hackathon evaluator injects API_KEY + API_BASE_URL for proxy-tracked calls.
 # Prefer API_KEY first so we never bypass their meter when both are present.
-API_KEY = os.getenv("API_KEY") or os.getenv("HF_TOKEN")
-API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
+# Phase 2 deep validation expects calls through the injected LiteLLM proxy.
+# Use explicit required env vars so we don't accidentally bypass proxy settings.
+API_KEY = os.environ["API_KEY"]
+API_BASE_URL = os.environ["API_BASE_URL"]
 MODEL_NAME = os.getenv("MODEL_NAME") or "Qwen/Qwen2.5-72B-Instruct"
 BENCHMARK = "bugforge"
 MAX_STEPS = 8
@@ -215,34 +217,14 @@ def get_action(
     files_read = observation.get("files_read", [])
     patches_applied = observation.get("patches_applied", 0)
 
-    if step == 1:
-        return json.dumps({"type": "run_tests"}, ensure_ascii=True)
-
     if tests_total > 0 and tests_passing == tests_total:
         return json.dumps({"type": "done"}, ensure_ascii=True)
-
-    if patches_applied > 0 and last_action_was_patch(history):
-        return json.dumps({"type": "run_tests"}, ensure_ascii=True)
-
-    if should_reinspect_after_failed_patch(observation, history):
-        if "tests.py" not in files_read:
-            return json.dumps({"type": "read_file", "file": "tests.py"}, ensure_ascii=True)
-        return json.dumps({"type": "read_file", "file": choose_file_from_output(observation.get("output", ""), files_read)}, ensure_ascii=True)
-
-    if should_read_models(observation, file_cache):
-        return json.dumps({"type": "read_file", "file": "models.py"}, ensure_ascii=True)
-
-    if not files_read:
-        next_file = choose_file_from_output(observation.get("output", ""), files_read)
-        return json.dumps({"type": "read_file", "file": next_file}, ensure_ascii=True)
-
-    if should_read_tests_before_patch(observation, file_cache):
-        return json.dumps({"type": "read_file", "file": "tests.py"}, ensure_ascii=True)
 
     history_block = "\n".join(history[-4:]) if history else "None"
     output = observation.get("output", "")
     steps_remaining = observation.get("steps_remaining", 0)
     visible_files = {name: file_cache[name] for name in files_read if name in file_cache}
+    suggested_action = default_action(step, observation)
 
     user_prompt = textwrap.dedent(
         f"""\
@@ -255,6 +237,8 @@ def get_action(
         {json.dumps(visible_files, ensure_ascii=True)}
         Patches applied: {patches_applied}
         Steps remaining: {steps_remaining}
+        Suggested fallback action if unsure:
+        {json.dumps(suggested_action, ensure_ascii=True)}
         Previous steps:
         {history_block}
         Choose the next action.
